@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Faithful PDF Editor</title>
 <meta name="description" content="Edit PDFs in your browser without changing their fonts or layout. Nothing leaves your device.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Crect x='3' y='1.5' width='17' height='23' rx='3' fill='%230b7a75'/%3E%3Cpath d='M8 8h8M8 12h8M8 16h5' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Crect x='3' y='1.5' width='17' height='23' rx='3' fill='%231f5fd0'/%3E%3Cpath d='M8 8h8M8 12h8M8 16h5' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="style.css">
 <script>try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
@@ -17,23 +17,30 @@
 
   <header class="bar">
     <div class="brand" aria-label="Faithful PDF Editor">
-      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="1.5" width="17" height="23" rx="3" fill="var(--accent)"/><path d="M8 8h8M8 12h8M8 16h5" stroke="var(--accent-fg)" stroke-width="1.6" stroke-linecap="round"/><path d="M15 21.5l7.5-7.5 2 2-7.5 7.5-3 1z" fill="var(--fg)" stroke="var(--bg)" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="1.5" width="17" height="23" rx="3" fill="var(--accent)"/><path d="M8 8h8M8 12h8M8 16h5" stroke="var(--accent-fg)" stroke-width="1.6" stroke-linecap="round"/><path d="M15 21.5l7.5-7.5 2 2-7.5 7.5-3 1z" fill="var(--fg)" stroke="var(--bar-bg)" stroke-width="1.4" stroke-linejoin="round"/></svg>
       <span>Faithful</span>
     </div>
-    <div class="doc" id="doc" hidden>
-      <span class="doc-name" id="docname"></span>
-      <span class="doc-edits" id="edits">No changes</span>
-    </div>
+    <div class="doc" id="doc" hidden><span class="doc-name" id="docname"></span></div>
     <div class="spacer"></div>
+    <button class="chip" id="changes" hidden aria-expanded="false" aria-controls="panel"><b id="ccount">0</b><span id="clabel">changes</span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
     <div class="zoom" id="zoom" hidden role="group" aria-label="Zoom">
       <button class="icon" id="zout" aria-label="Zoom out" title="Zoom out (−)"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
       <button class="zval" id="zval" title="Fit to width (0)">100%</button>
       <button class="icon" id="zin" aria-label="Zoom in" title="Zoom in (+)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
     </div>
-    <button class="icon" id="open" aria-label="Open another PDF" title="Open PDF (Ctrl+O)"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+    <button class="icon" id="open" aria-label="Open a PDF" title="Open PDF (Ctrl+O)"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
     <button class="icon" id="theme" aria-label="Toggle theme" title="Toggle theme"><svg viewBox="0 0 24 24" class="sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg viewBox="0 0 24 24" class="moon"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></button>
-    <button class="primary" id="save" disabled><span class="lbl">Save PDF</span><svg class="spin" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/></svg><svg class="tick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+    <button class="primary" id="save" hidden disabled><span class="lbl">Save PDF</span><svg class="spin" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/></svg><svg class="tick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
   </header>
+
+  <div class="ctx" id="ctx">
+    <span class="ctx-tool" id="ctxTool"></span>
+    <span class="hint" id="hint"></span>
+    <span class="ctrl" id="swatches" role="group" aria-label="Colour"></span>
+    <label class="ctrl size" id="sizeCtl"><span id="sizeLbl">Size</span><input id="size" type="range" min="6" max="72" value="12"><output id="sizeVal">12</output></label>
+    <span class="spacer"></span>
+    <span class="pager" id="pager" aria-live="polite"><span class="pw">Page </span><span class="roll"><b id="pnow">1</b></span><span class="pw"> of </span><span class="ps">/</span><span id="pall">1</span></span>
+  </div>
 
   <div class="progress" id="progress"><i></i></div>
 
@@ -43,32 +50,47 @@
 
   <main id="stage" tabindex="-1"><div id="pages"></div></main>
 
-  <div id="pager" class="pager" hidden aria-live="polite"><span class="roll"><b id="pnow">1</b></span><span class="of">of <span id="pall">1</span></span></div>
-
-  <div id="inspector" class="inspector" hidden>
-    <span class="hint" id="hint"></span>
-    <span class="ctrl" id="swatches" role="group" aria-label="Colour"></span>
-    <label class="ctrl size" id="sizeCtl"><span id="sizeLbl">Size</span><input id="size" type="range" min="6" max="72" value="12"><output id="sizeVal">12</output></label>
-  </div>
+  <section id="panel" class="panel" hidden aria-label="Changes">
+    <header><strong>Changes</strong><span id="pmeta"></span></header>
+    <ol id="plist"></ol>
+    <p class="pempty" id="pempty">No changes yet. Pick a tool and edit the page.</p>
+  </section>
 
   <section id="landing">
     <div class="hero">
-      <p class="eyebrow">Browser-only · Nothing is uploaded</p>
-      <h1>Change the words.<br><em>Keep everything else.</em></h1>
-      <p class="lede">Edit text straight inside the PDF. Fonts, spacing and layout stay exactly as the author set them.</p>
-      <label class="drop" id="drop" tabindex="0">
-        <input id="file" type="file" accept="application/pdf" hidden>
-        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 6h14l10 10v24a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/><path d="M28 6v10h10M24 35V23m-5 5l5-5 5 5"/></svg>
-        <strong>Drop a PDF here</strong>
-        <span>or click to choose a file</span>
-      </label>
-      <div class="alt"><button id="sample" class="ghost">Try with a sample document</button><span class="kbd">Ctrl&nbsp;O</span></div>
-      <ul class="facts">
-        <li><b>In-place</b> text edits reuse the original font and size</li>
-        <li><b>Untouched</b> pages, images and vector art are never re-encoded</li>
-        <li><b>Private</b> everything runs on your device</li>
-      </ul>
+      <div class="copy">
+        <p class="eyebrow">Runs in your browser · files never leave your device</p>
+        <h1>Change the words.<br><span>Keep the typesetting.</span></h1>
+        <p class="lede">Edit text inside the PDF itself. The original font, size, spacing and layout stay as the author set them.</p>
+        <label class="drop" id="drop" tabindex="0">
+          <input id="file" type="file" accept="application/pdf" hidden>
+          <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 6h14l10 10v24a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/><path d="M28 6v10h10M24 35V23m-5 5l5-5 5 5"/></svg>
+          <span class="drop-t"><strong>Drop a PDF here</strong><span>or click to choose a file</span></span>
+        </label>
+        <div class="alt"><button id="sample" class="ghost">Open a sample invoice</button><span class="kbd desk">Ctrl O</span><span class="muted desk">to open a file</span></div>
+      </div>
+
+      <figure class="demo" aria-label="Example: a figure changes from 12% to 18% while its font stays Times Bold 11 pt">
+        <div class="sheetdemo">
+          <div class="d-head">Q3 Operating Report</div>
+          <div class="d-sub">Northlight Cooperative · October 2026</div>
+          <div class="d-bars"><i style="width:92%"></i><i style="width:84%"></i><i style="width:88%"></i></div>
+          <p class="d-line"><span class="d-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 15.5l6-7 6 7"/></svg></span>Revenue grew <span class="d-edit" id="demoEdit"><span id="demoText">12%</span><i class="d-caret"></i></span> over the quarter.</p>
+          <div class="d-bars"><i style="width:90%"></i><i style="width:76%"></i><i style="width:86%"></i><i style="width:58%"></i></div>
+          <div class="d-bars"><i style="width:88%"></i><i style="width:64%"></i></div>
+          <div class="d-table"><span>Region</span><span>Q2</span><span>Q3</span><span>North</span><span>4.1</span><span>4.6</span><span>Coast</span><span>3.3</span><span>3.9</span></div>
+        </div>
+        <figcaption>
+          <span class="tag">Times-Bold</span><span class="tag">11 pt</span><span class="tag">baseline 412.6</span>
+          <span class="cap">Same font and position after the edit</span>
+        </figcaption>
+      </figure>
     </div>
+    <ul class="facts">
+      <li><b>In place</b><span>Text edits reuse the document's own font and size.</span></li>
+      <li><b>Untouched</b><span>Pages you don't edit, images and vector art are copied as they are.</span></li>
+      <li><b>Private</b><span>No upload, no account. Everything runs on your device.</span></li>
+    </ul>
   </section>
 
   <div id="toasts" role="status" aria-live="polite"></div>

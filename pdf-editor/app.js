@@ -7,8 +7,9 @@ const { PDFDocument, StandardFonts, rgb, LineCapStyle } = PDFLib;
 const SCALE = 1.5;                         // CSS px per PDF point at 100% zoom
 const $ = (id) => document.getElementById(id);
 const el = { app: $('app'), stage: $('stage'), pages: $('pages'), thumbs: $('thumbs'), dock: $('dock'), ind: $('ind'),
-  landing: $('landing'), inspector: $('inspector'), hint: $('hint'), save: $('save'), toasts: $('toasts'), pager: $('pager') };
+  landing: $('landing'), hint: $('hint'), save: $('save'), toasts: $('toasts'), pager: $('pager') };
 
+let version = 0, savedVersion = 0;
 let origBytes = null, fileName = 'edited.pdf', pages = [], history = [], loadToken = 0;
 let tool = 'edit', color = '#111111', sizes = { text: 14, draw: 3 }, pendingImage = null, current = -1;
 
@@ -35,8 +36,8 @@ function toast(msg, kind = '', action) {
   t.className = 'toast ' + kind; t.textContent = msg;
   if (action) { const b = document.createElement('button'); b.className = 'ghost'; b.textContent = action.label; b.style.cssText = 'padding:3px 10px;color:var(--fg)'; b.onclick = () => { action.run(); dismiss(); }; t.append(b); }
   el.toasts.append(t);
-  play(t, [{ opacity: 0, transform: 'translateX(28px) scale(.95)' }, { opacity: 1, transform: 'none' }], { spring: [300, 24] });
-  const dismiss = () => play(t, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(16px) scale(.97)' }], { duration: 200 }).then(() => t.remove());
+  play(t, [{ opacity: 0, transform: 'translateY(18px) scale(.95)' }, { opacity: 1, transform: 'none' }], { spring: [300, 24] });
+  const dismiss = () => play(t, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(10px) scale(.97)' }], { duration: 200 }).then(() => t.remove());
   setTimeout(dismiss, action ? 9000 : 4200);
 }
 
@@ -130,6 +131,8 @@ async function loadItems(pg) {
     h.className = 'hit';
     Object.assign(h.style, { left: it.x * SCALE + 'px', top: (it.base - it.size * 0.85) * SCALE + 'px', width: it.w * SCALE + 'px', height: it.size * 1.1 * SCALE + 'px' });
     h.addEventListener('click', (e) => { if (tool === 'edit') { e.stopPropagation(); editItem(pg, it); } });
+    h.addEventListener('pointerenter', () => setHint('Click to edit. This font and size are kept.', `${it.font.label} · ${+it.size.toFixed(1)} pt`));
+    h.addEventListener('pointerleave', () => setHint(TOOLS[0].hint));
     it.hit = h; pg.hitsEl.append(h);
   }
   applyTool(pg);
@@ -159,9 +162,12 @@ function sample(pg, x, y, w, h) {
   const sx = Math.max(0, Math.floor(x * d)), sy = Math.max(0, Math.floor(y * d));
   const sw = Math.max(1, Math.min(pg.canvas.width - sx, Math.ceil(w * d))), sh = Math.max(1, Math.min(pg.canvas.height - sy, Math.ceil(h * d)));
   const px = pg.canvas.getContext('2d').getImageData(sx, sy, sw, sh).data, counts = new Map();
-  for (let i = 0; i < px.length; i += 4) { const k = ((px[i] >> 3) << 10) | ((px[i + 1] >> 3) << 5) | (px[i + 2] >> 3); counts.set(k, (counts.get(k) || 0) + 1); }
-  let bestK = 0, best = -1; for (const [k, c] of counts) if (c > best) { best = c; bestK = k; }
-  const bg = [((bestK >> 10) & 31) * 8 + 4, ((bestK >> 5) & 31) * 8 + 4, (bestK & 31) * 8 + 4];
+  for (let i = 0; i < px.length; i += 4) {
+    const k = ((px[i] >> 3) << 10) | ((px[i + 1] >> 3) << 5) | (px[i + 2] >> 3), c = counts.get(k) || [0, 0, 0, 0];
+    c[0]++; c[1] += px[i]; c[2] += px[i + 1]; c[3] += px[i + 2]; counts.set(k, c);
+  }
+  let best = null; for (const c of counts.values()) if (!best || c[0] > best[0]) best = c;
+  const bg = [best[1] / best[0], best[2] / best[0], best[3] / best[0]];   // mean of the dominant bin, so white stays #ffffff
   let ink = bg, far = -1;
   for (let i = 0; i < px.length; i += 4) { const dist = Math.abs(px[i] - bg[0]) + Math.abs(px[i + 1] - bg[1]) + Math.abs(px[i + 2] - bg[2]); if (dist > far) { far = dist; ink = [px[i], px[i + 1], px[i + 2]]; } }
   return { bg: rgb2hex(bg), ink: rgb2hex(ink) };
@@ -203,9 +209,10 @@ async function load(bytes = origBytes, name) {
   const z = fitZoom(); anchor = null; Z.snap(z); $('zval').textContent = Math.round(z * 100) + '%';
   el.stage.scrollTop = 0; el.stage.scrollLeft = 0;
   $('docname').textContent = fileName.replace(/-edited\.pdf$/, '') + '.pdf';
-  ['doc', 'zoom', 'pager'].forEach((id) => ($(id).hidden = false));
+  ['doc', 'zoom', 'changes', 'save'].forEach((id) => ($(id).hidden = false));
+  version = savedVersion = 0; closePanel();
   $('pall').textContent = pages.length;
-  updateEdits(); setTool(tool, true);
+  updateEdits(false); setTool(tool, true);
   if (wasEmpty) enterUI();
   await ensureRes();
   progress(0.95);
@@ -295,16 +302,66 @@ function drawLayer(pg) {
       n.innerHTML = `<svg width="100%" height="100%" style="position:absolute;left:0;top:0;overflow:visible"><polyline fill="none" stroke="${op.color}" stroke-width="${op.width * S}" stroke-linecap="round" stroke-linejoin="round" points="${op.pts.map((p) => p[0] * S + ',' + p[1] * S).join(' ')}"/></svg>`;
     }
     pg.opsEl.append(n);
+    if (op.t === 'replace' || op.t === 'text') {
+      const m = document.createElement('span'); m.className = 'mark'; m.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 15.5l6-7 6 7"/></svg>'; m.setAttribute('aria-hidden', 'true');
+      m.style.top = (op.t === 'replace' ? op.base - op.size * 0.35 : op.y + op.size * 0.6) * S + 'px';
+      pg.opsEl.append(m);
+      if (op.fresh) play(m, [{ opacity: 0, transform: 'scale(0)' }, { opacity: 1, transform: 'none' }], { spring: [520, 18], delay: 80 });
+    }
     if (op.fresh) { op.fresh = false; if (op.t !== 'draw') play(n, [{ opacity: 0, transform: 'scale(.93)' }, { opacity: 1, transform: 'none' }], { spring: [420, 24] }); }
   });
   applyTool(pg);
 }
-function updateEdits() {
-  const n = history.length, e = $('edits');
-  e.textContent = n ? `${n} change${n > 1 ? 's' : ''} · not saved` : 'No changes'; e.classList.toggle('dirty', !!n);
+const KIND = { replace: 'edit', text: 'text', cover: 'cover', draw: 'draw', image: 'image' };
+const dirty = () => history.length > 0 && version !== savedVersion;
+function updateEdits(bump = true) {
+  if (bump) version++;
+  const n = history.length, chip = $('changes'), cnt = $('ccount'), prev = cnt.textContent;
+  cnt.textContent = n; $('clabel').textContent = n === 1 ? 'change' : 'changes';
+  chip.classList.toggle('dirty', dirty());
+  if (prev !== String(n)) play(cnt, [{ transform: 'scale(1.35)' }, { transform: 'none' }], { spring: [520, 18] });
   if (el.save.dataset.s !== 'busy') el.save.disabled = !n;
+  pages.forEach((pg) => { if (!pg.thumb) return; let b = pg.thumb.querySelector('i'); const k = pg.ops.length;
+    if (!k) { b?.remove(); return; } if (!b) { b = document.createElement('i'); pg.thumb.append(b); play(b, [{ transform: 'scale(0)' }, { transform: 'none' }], { spring: [500, 20] }); } b.textContent = k; });
+  if (!$('panel').hidden) renderPanel();
 }
 function addOp(pg, op) { op.fresh = true; pg.ops.push(op); history.push([pg, op]); drawLayer(pg); updateEdits(); }
+function removeOp(pg, op) { pg.ops = pg.ops.filter((o) => o !== op); history = history.filter(([, o]) => o !== op); drawLayer(pg); updateEdits(); }
+const opY = (op) => op.t === 'replace' ? op.cy : op.t === 'draw' ? Math.min(...op.pts.map((p) => p[1])) : op.y;
+function describe(op) {
+  const q = (t) => '“' + (t.length > 42 ? t.slice(0, 40) + '…' : t) + '”';
+  if (op.t === 'replace') return op.str.trim() ? { main: q(op.str), was: op.orig } : { main: 'Deleted text', was: op.orig };
+  if (op.t === 'text') return { main: 'Added ' + q(op.str) };
+  return { main: { cover: 'White-out', draw: 'Drawing', image: 'Image' }[op.t] };
+}
+function renderPanel() {
+  const list = $('plist'); list.replaceChildren();
+  $('pempty').hidden = history.length > 0;
+  $('pmeta').textContent = history.length ? (dirty() ? 'not saved' : 'saved') : '';
+  history.forEach(([pg, op]) => {
+    const li = document.createElement('li'), d = describe(op), t = document.createElement('span'), b = document.createElement('b'), sm = document.createElement('small');
+    const tdef = TOOLS.find((x) => x.id === KIND[op.t]); const k = document.createElement('span'); k.className = 'k'; k.innerHTML = tdef.icon;
+    t.className = 't'; b.textContent = d.main; t.append(b);
+    if (d.was) { const s2 = document.createElement('s'); s2.textContent = d.was; const w = document.createElement('small'); w.append('was ', s2); t.append(w); }
+    sm.textContent = `page ${pages.indexOf(pg) + 1}` + (op.t === 'replace' ? ` · ${op.font.label} · ${+op.size.toFixed(1)} pt` : ''); t.append(sm);
+    const x = document.createElement('button'); x.setAttribute('aria-label', 'Remove this change'); x.innerHTML = I('<path d="M6 6l12 12M18 6L6 18"/>');
+    x.onclick = (e) => { e.stopPropagation(); play(li, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(12px)' }], { duration: 160 }).then(() => removeOp(pg, op)); };
+    li.onclick = () => { closePanel(); smoothScroll(el.stage, Math.max(0, pg.el.offsetTop + opY(op) * SCALE * curZ - el.stage.clientHeight / 3));
+      setTimeout(() => { const n = [...pg.opsEl.children].find((c) => c._op === op); n?.classList.remove('flash'); void n?.offsetWidth; n?.classList.add('flash'); }, 450); };
+    li.append(k, t, x); list.append(li);
+  });
+}
+function openPanel() {
+  renderPanel(); const p = $('panel'); p.hidden = false; $('changes').setAttribute('aria-expanded', 'true');
+  play(p, [{ opacity: 0, transform: 'translateY(-8px) scale(.96)' }, { opacity: 1, transform: 'none' }], { spring: [420, 28] });
+  [...$('plist').children].slice(0, 10).forEach((li, i) => play(li, [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { spring: [380, 26], delay: 30 + i * 28 }));
+}
+function closePanel() {
+  const p = $('panel'); if (p.hidden) return; $('changes').setAttribute('aria-expanded', 'false');
+  play(p, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-6px) scale(.97)' }], { duration: 150 }).then(() => { p.hidden = true; p.style.opacity = ''; p.style.transform = ''; });
+}
+$('changes').onclick = (e) => { e.stopPropagation(); $('panel').hidden ? openPanel() : closePanel(); };
+addEventListener('pointerdown', (e) => { if (!$('panel').hidden && !e.target.closest('#panel,#changes')) closePanel(); });
 
 function openEditor(pg, { x, y, str, size, color, font, onDone, width }) {
   const ed = document.createElement('div');
@@ -338,7 +395,7 @@ function wirePage(pg) {
       const n = e.target.closest('.op'); if (!n || !n._op) return;
       const op = n._op;
       await play(n, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(.9)' }], { duration: 150 });
-      pg.ops = pg.ops.filter((o) => o !== op); history = history.filter(([, o]) => o !== op); drawLayer(pg); updateEdits();
+      removeOp(pg, op);
     } else if (tool === 'text') {
       e.preventDefault(); const size = sizes.text, c = color;
       openEditor(pg, { x, y, str: '', size, color: c, font: classify('', 'sans-serif'), onDone: (v) => v.trim() && addOp(pg, { t: 'text', x, y, size, color: c, font: classify('', 'sans-serif'), str: v }) });
@@ -405,16 +462,17 @@ function setTool(t, silent) {
   el.dock.querySelectorAll('[data-tool]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.tool === t));
   moveInd(silent || el.app.dataset.state === 'empty');
   pages.forEach(applyTool);
-  el.hint.textContent = def.hint;
+  setHint(def.hint);
+  $('ctxTool').innerHTML = def.icon; const nm = document.createElement('span'); nm.textContent = def.label; $('ctxTool').append(nm);
   const showCtl = !!def.ctl, size = $('size');
   $('swatches').hidden = !showCtl; $('sizeCtl').hidden = !showCtl;
   if (showCtl) { const d = def.ctl === 'draw'; size.min = d ? 1 : 6; size.max = d ? 24 : 72; size.value = sizes[def.ctl]; $('sizeVal').textContent = size.value; $('sizeLbl').textContent = d ? 'Width' : 'Size'; }
-  el.inspector.classList.toggle('has-ctl', showCtl);
-  el.inspector.classList.add('flash'); clearTimeout(setTool.t); setTool.t = setTimeout(() => el.inspector.classList.remove('flash'), 2600);
-  if (el.app.dataset.state === 'ready') {
-    if (el.inspector.hidden) { el.inspector.hidden = false; play(el.inspector, [{ opacity: 0, transform: 'translateY(18px) scale(.96)' }, { opacity: 1, transform: 'none' }], { spring: [280, 22], delay: 500 }); }
-    else if (changed) play(el.hint, [{ opacity: 0, transform: 'translateY(5px)' }, { opacity: 1, transform: 'none' }], { duration: 240 });
-  }
+  if (changed && el.app.dataset.state === 'ready') ['ctxTool', 'hint', 'swatches', 'sizeCtl'].forEach((id, i) => !$(id).hidden && play($(id), [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { spring: [380, 26], delay: i * 35 }));
+}
+function setHint(text, font) {
+  const h = el.hint; h.replaceChildren();
+  if (font) { const f = document.createElement('span'); f.className = 'font'; f.textContent = font; h.append(f); }
+  h.append(text);
 }
 function applyTool(p) {
   p.el.classList.toggle('drawing', tool === 'draw'); p.el.classList.toggle('covering', tool === 'cover'); p.el.classList.toggle('texting', tool === 'text'); p.el.classList.toggle('placing', tool === 'image');
@@ -434,7 +492,7 @@ async function openFile(f) {
   if (!f) return;
   if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) return toast('Choose a PDF file.', 'err');
   const go = async () => load(new Uint8Array(await f.arrayBuffer()), f.name);
-  if (history.length) toast(`Discard ${history.length} unsaved change${history.length > 1 ? 's' : ''} and open ${f.name}?`, '', { label: 'Discard & open', run: go });
+  if (dirty()) toast(`Discard ${history.length} unsaved change${history.length > 1 ? 's' : ''} and open ${f.name}?`, '', { label: 'Discard & open', run: go });
   else go();
 }
 $('file').addEventListener('change', (e) => { openFile(e.target.files[0]); e.target.value = ''; });
@@ -509,16 +567,16 @@ async function save() {
     const [out] = await Promise.all([buildPdf(), new Promise((r) => setTimeout(r, 450))]);
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([out], { type: 'application/pdf' })); a.download = fileName; a.click();
     el.save.dataset.s = 'done';
-    $('edits').textContent = 'Saved'; $('edits').classList.remove('dirty'); history = history.slice(); window.__saved = true;
+    savedVersion = version;
     toast(`Saved ${fileName}. ${stats.inPlace ? stats.inPlace + ' text edit' + (stats.inPlace > 1 ? 's' : '') + ' made in place' : 'Original content untouched'}${stats.overlay ? '; ' + stats.overlay + ' used the nearest-font fallback' : ''}.`, 'ok');
-    setTimeout(() => { el.save.dataset.s = ''; updateEdits(); }, 1700);
+    setTimeout(() => { el.save.dataset.s = ''; updateEdits(false); }, 1700);
   } catch (err) {
-    el.save.dataset.s = ''; updateEdits();
+    el.save.dataset.s = ''; updateEdits(false);
     toast('Could not save: ' + err.message + (/WinAnsi|encode/i.test(err.message) ? ' (replacement text supports Latin characters only)' : ''), 'err');
   }
 }
 el.save.onclick = save;
-addEventListener('beforeunload', (e) => { if (history.length && !window.__saved) { e.preventDefault(); e.returnValue = ''; } });
+addEventListener('beforeunload', (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ''; } });
 
 // ---------------------------------------------------------------- theme + keyboard
 $('theme').onclick = () => {
@@ -534,11 +592,29 @@ addEventListener('keydown', (e) => {
   else if (mod) return;
   else if (el.app.dataset.state !== 'ready') return;
   else if (k === '+' || k === '=') stepZoom(1); else if (k === '-') stepZoom(-1); else if (k === '0') setZoom(fitZoom());
-  else if (k === 'escape') setTool('edit');
+  else if (k === 'escape') { if (!$('panel').hidden) closePanel(); else setTool('edit'); }
   else { const d = TOOLS.find((x) => x.key.toLowerCase() === k); if (d) setTool(d.id); }
 });
 
 // ---------------------------------------------------------------- first paint: stagger the landing in
 [...document.querySelector('.hero').children].forEach((c, i) => play(c, [{ opacity: 0, transform: 'translateY(26px)' }, { opacity: 1, transform: 'none' }], { spring: [170, 21], delay: 60 + i * 75 }));
+
+// landing demo: an in-place edit typed out, then reverted, on a loop
+(function demo() {
+  const t = $('demoText'); if (!t || reduced) { if (t) t.textContent = '18%'; return; }
+  const seq = ['12%', '18%'], wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let i = 0;
+  (async function loop() {
+    while (el.app.dataset.state === 'empty') {
+      await wait(1600);
+      const from = seq[i % 2], to = seq[(i + 1) % 2];
+      for (let k = from.length; k >= 0; k--) { t.textContent = from.slice(0, k); await wait(70); }
+      await wait(160);
+      for (let k = 1; k <= to.length; k++) { t.textContent = to.slice(0, k); await wait(110); }
+      play($('demoEdit'), [{ background: '#1f5fd040' }, { background: '#1f5fd012' }], { duration: 600 });
+      i++;
+    }
+  })();
+})();
 
 window.__editor = { stats, get pages() { return pages; }, buildPdf, load, setOrig: (b) => (origBytes = b), addOp, classify, makeSample };

@@ -12,7 +12,7 @@ A browser-based PDF editor whose one rule is: **don't change the document's form
 2. **Overlay fallback:** for CID/Type0 fonts or glyphs not in a subset, the old text is covered and new text is drawn in the nearest standard font. The status bar reports how many edits used each path.
 
 ## Interface
-Landing drop-zone (or a built-in sample invoice), page thumbnails, a floating tool dock, light/dark theme, and keyboard shortcuts: V edit, T text, W white-out, D draw, I image, E remove, Ctrl+Z undo, Ctrl+S save, Ctrl+O open, +/−/0 zoom. Two-finger pinch or Ctrl+scroll zooms around the pointer. Pages and thumbnails render lazily and canvases far from view are released, so long documents (150 pages tested) stay responsive. On phones the dock sits at the bottom and the hint fades out after a moment.
+Landing page with a live in-place edit demo and a sample invoice; a context bar for the active tool (hovering text shows its real font and size); a Changes panel listing every edit with jump-to and remove; proofreader's caret marks in the margin beside edited lines; page thumbnails with per-page edit counts; a floating tool dock; light/dark theme; and keyboard shortcuts: V edit, T text, W white-out, D draw, I image, E remove, Ctrl+Z undo, Ctrl+S save, Ctrl+O open, +/−/0 zoom. Two-finger pinch or Ctrl+scroll zooms around the pointer. Pages and thumbnails render lazily and canvases far from view are released, so long documents (150 pages tested) stay responsive. On phones the dock sits at the bottom and the hint fades out after a moment.
 Motion is hand-built in `motion.js`: a spring solver (zoom, tool indicator, progress) and spring-sampled CSS `linear()` easings for entrances. Honours `prefers-reduced-motion`.
 
 ## Tools
