@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": null,
+  "installCommand": null,
+  "outputDirectory": ".",
+  "headers": [
+    { "source": "/vendor/(.*)\\.mjs", "headers": [{ "key": "Content-Type", "value": "text/javascript" }] }
+  ]
+}
