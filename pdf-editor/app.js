@@ -1,4 +1,5 @@
 import * as pdfjsLib from './vendor/pdf.min.mjs';
+import { replaceInPlace } from './inplace.js';
 pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.mjs';
 
 const { PDFDocument, StandardFonts, rgb, LineCapStyle } = PDFLib;
@@ -67,12 +68,14 @@ async function load() {
       viewport: page.getViewport({ scale: SCALE * dpr }) }).promise;
 
     const tc = await page.getTextContent();
+    const seenStr = new Map();
     const items = tc.items.filter((it) => it.str && it.str.trim()).map((it) => {
       let real = '';
       try { real = page.commonObjs.get(it.fontName).name || ''; } catch {}
       const fam = tc.styles[it.fontName]?.fontFamily || '';
       const size = Math.hypot(it.transform[0], it.transform[1]);
-      return { str: it.str, x: it.transform[4], base: vp.height - it.transform[5], w: it.width, size,
+      const occ = seenStr.get(it.str) || 0; seenStr.set(it.str, occ + 1);
+      return { occ, str: it.str, x: it.transform[4], base: vp.height - it.transform[5], w: it.width, size,
         font: classify(real, fam) };
     });
     const pg = { w: vp.width, h: vp.height, el, layer, canvas, dpr, ops: [], items };
@@ -181,7 +184,7 @@ function editItem(pg, it) {
     onDone: (v) => {
       if (v === it.str) return;
       const op = { t: 'replace', x: it.x, cy: top, ch: it.size * 1.15, w: Math.max(it.w, 1), base: it.base, size: it.size,
-        str: v, color: ink, bg, font: it.font };
+        str: v, orig: it.str, occ: it.occ, color: ink, bg, font: it.font };
       addOp(pg, op);
       status(`Replaced text using ${it.font.label} → nearest standard face (${stdFont(it.font)}). Everything else is unchanged.`);
     } });
@@ -255,16 +258,23 @@ addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === '
 
 
 // ---------- save: load ORIGINAL bytes, only append overlay content ----------
+const stats = { inPlace: 0, overlay: 0 };
 export async function buildPdf() {
+  stats.inPlace = stats.overlay = 0;
   const doc = await PDFDocument.load(origBytes, { ignoreEncryption: false });
   const cache = new Map();
   const font = async (f) => { const k = stdFont(f); if (!cache.has(k)) cache.set(k, await doc.embedFont(k)); return cache.get(k); };
   const col = (h) => rgb(...hex2rgb(h));
   for (let i = 0; i < pages.length; i++) {
     const pg = pages[i], page = doc.getPage(i), H = page.getHeight();
+    // 1) try true in-place edits (original font/size/position kept); the rest fall back to overlay
+    const reps = pg.ops.filter((o) => o.t === 'replace');
+    const done = replaceInPlace(doc, page, reps);
+    reps.forEach((o, k) => { o.inPlace = done[k]; stats.inPlace += done[k] ? 1 : 0; stats.overlay += done[k] ? 0 : 1; });
     for (const op of pg.ops) {
       if (op.t === 'cover') page.drawRectangle({ x: op.x, y: H - op.y - op.h, width: op.w, height: op.h, color: col(op.color), borderWidth: 0 });
       else if (op.t === 'replace') {
+        if (op.inPlace) continue;
         page.drawRectangle({ x: op.x - 1, y: H - op.cy - op.ch, width: op.w + 2, height: op.ch, color: col(op.bg), borderWidth: 0 });
         if (op.str.trim()) page.drawText(op.str, { x: op.x, y: H - op.base, size: op.size, font: await font(op.font), color: col(op.color) });
       } else if (op.t === 'text') {
@@ -289,9 +299,9 @@ $('save').addEventListener('click', async () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([out], { type: 'application/pdf' }));
     a.download = fileName; a.click();
-    status('Saved. Original page content, fonts and layout were preserved byte-for-byte; edits were appended on top.');
+    status(`Saved. ${stats.inPlace} text edit(s) done in place with the original font; ${stats.overlay} used the nearest-font overlay. Everything else is untouched.`);
   } catch (err) {
     status('Save failed: ' + err.message + (/WinAnsi|encode/i.test(err.message) ? ' (standard fonts only support Latin characters)' : ''));
   }
 });
-window.__editor = { get pages() { return pages; }, buildPdf, load, setOrig: (b) => (origBytes = b), addOp, classify };
+window.__editor = { stats, get pages() { return pages; }, buildPdf, load, setOrig: (b) => (origBytes = b), addOp, classify };

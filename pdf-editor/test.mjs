@@ -31,11 +31,17 @@ await page.locator('.hit').first().click();
 await page.keyboard.press('Control+A');
 await page.keyboard.type('Hello Edited World');
 await page.keyboard.press('Enter');
+await page.locator('.hit').last().click();
+await page.keyboard.press('Control+A');
+await page.keyboard.type('goes');
+await page.keyboard.press('Enter');
 await page.click('[data-tool=text]');
 await page.mouse.click(450, 400);
 await page.keyboard.type('New note');
 await page.keyboard.press('Enter');
 const out = Uint8Array.from(await page.evaluate(async () => [...(await window.__editor.buildPdf())]));
+const st = await page.evaluate(() => ({ ...window.__editor.stats }));
+assert.equal(st.inPlace, 2, 'expected in-place edit: ' + JSON.stringify(st));
 await b.close(); srv.close();
 
 const doc = await PDFDocument.load(out);
@@ -43,7 +49,7 @@ assert.deepEqual([doc.getPage(0).getWidth(), doc.getPage(0).getHeight()], [400, 
 const text = (await (await (await pdfjs.getDocument({ data: out, standardFontDataUrl: join(root, 'node_modules/pdfjs-dist/standard_fonts/') }).promise).getPage(1)).getTextContent()).items.map((i) => i.str).join('');
 console.log(text);
 assert(text.includes('Hello Edited World') && text.includes('New note'), 'edits missing');
-assert(text.includes('Second line stays'), 'untouched text was altered');
-assert(text.includes('Hello Original World'), 'original content stream should be preserved underneath the cover');
+assert(text.includes('Second line goes'), 'substring edit failed');
+assert(!text.includes('Hello Original World'), 'edit should be in place (no hidden original text)');
 assert.deepEqual(errs, [], 'page errors');
 console.log('PASS');
