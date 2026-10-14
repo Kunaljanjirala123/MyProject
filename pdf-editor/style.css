@@ -1,0 +1,22 @@
+*{box-sizing:border-box}
+body{margin:0;font:14px system-ui,sans-serif;background:#555;color:#222}
+header{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;background:#f4f4f4;border-bottom:1px solid #bbb}
+button,.btn{font:inherit;padding:5px 10px;border:1px solid #999;border-radius:5px;background:#fff;cursor:pointer}
+button.active{background:#cde3ff;border-color:#2a6edb}
+button.primary{background:#2a6edb;color:#fff;border-color:#2a6edb}
+.sep{width:1px;height:22px;background:#bbb;margin:0 4px}
+input[type=number]{width:60px}
+#status{background:#fffbe0;padding:6px 12px;font-size:13px;border-bottom:1px solid #ddd}
+#pages{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px;overflow:auto}
+.page{position:relative;background:#fff;box-shadow:0 2px 10px #0008}
+.page canvas{display:block}
+.layer{position:absolute;inset:0}
+.op{position:absolute;white-space:pre;line-height:1}
+.op.cover{pointer-events:none}
+.hit{position:absolute;cursor:text}
+.hit:hover{outline:1px dashed #2a6edb;background:#2a6edb18}
+.editor{position:absolute;background:#fff;border:1px solid #2a6edb;outline:none;white-space:pre;line-height:1;padding:0;margin:0;z-index:10;min-width:20px}
+.rubber{position:absolute;border:1px dashed #2a6edb;background:#2a6edb22;pointer-events:none}
+.erasing .op{cursor:not-allowed;outline:1px dashed red}
+.page.drawing,.page.covering{cursor:crosshair}
+.page.texting{cursor:text}

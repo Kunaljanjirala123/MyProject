@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Faithful PDF Editor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <strong>Faithful PDF Editor</strong>
+  <label class="btn">Open PDF<input id="file" type="file" accept="application/pdf" hidden></label>
+  <span class="sep"></span>
+  <button data-tool="edit" class="tool active" title="Click existing text to change it">Edit text</button>
+  <button data-tool="text" class="tool" title="Click anywhere to add new text">Add text</button>
+  <button data-tool="cover" class="tool" title="Drag to white-out an area">White-out</button>
+  <button data-tool="draw" class="tool" title="Freehand draw">Draw</button>
+  <button data-tool="image" class="tool" title="Click to place an image">Image</button>
+  <button data-tool="erase" class="tool" title="Click an edit to remove it">Remove edit</button>
+  <span class="sep"></span>
+  <label>Color <input id="color" type="color" value="#000000"></label>
+  <label>Size <input id="size" type="number" min="4" max="200" value="12"></label>
+  <span class="sep"></span>
+  <button id="undo">Undo</button>
+  <button id="save" class="primary">Save PDF</button>
+  <input id="imgfile" type="file" accept="image/png,image/jpeg" hidden>
+</header>
+<div id="status">Open a PDF to begin. Original pages are never re-flowed or re-encoded; edits are layered on top.</div>
+<main id="pages"></main>
+<script src="vendor/pdf-lib.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

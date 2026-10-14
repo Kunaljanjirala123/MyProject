@@ -1,0 +1,17 @@
+{
+  "name": "faithful-pdf-editor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser PDF editor that layers edits over the original without re-flowing or re-encoding it",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node test.mjs"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "4.10.38"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.0"
+  }
+}
