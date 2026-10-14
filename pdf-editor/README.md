@@ -11,6 +11,10 @@ A browser-based PDF editor whose one rule is: **don't change the document's form
 1. **In place (preferred):** the string inside the original `Tj`/`TJ` operator is rewritten, so the original font, size, colour and position are kept and no hidden old text remains. Used for simple (Type1/TrueType) fonts, and for subset fonts only when every new character already appears in that font on the page.
 2. **Overlay fallback:** for CID/Type0 fonts or glyphs not in a subset, the old text is covered and new text is drawn in the nearest standard font. The status bar reports how many edits used each path.
 
+## Interface
+Landing drop-zone (or a built-in sample invoice), page thumbnails, a floating tool dock, light/dark theme, and keyboard shortcuts: V edit, T text, W white-out, D draw, I image, E remove, Ctrl+Z undo, Ctrl+S save, Ctrl+O open, +/−/0 zoom. Pinch or Ctrl+scroll zooms around the pointer.
+Motion is hand-built in `motion.js`: a spring solver (zoom, tool indicator, progress) and spring-sampled CSS `linear()` easings for entrances. Honours `prefers-reduced-motion`.
+
 ## Tools
 Edit text (click existing text) · Add text · White-out · Draw · Image (PNG/JPG) · Remove edit · Undo (Ctrl+Z) · Save PDF.
 
