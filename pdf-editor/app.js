@@ -81,6 +81,25 @@ el.stage.addEventListener('wheel', (e) => {
   setZoom(Z.target * Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.012)), { x: e.clientX, y: e.clientY });
 }, { passive: false });
 
+// two-finger pinch: direct manipulation, so it snaps instead of springing
+const touches = new Map(); let pinch = null;
+el.stage.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch') return;
+  touches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: Z.target }; }
+});
+el.stage.addEventListener('pointermove', (e) => {
+  if (!touches.has(e.pointerId)) return;
+  touches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (!pinch || touches.size !== 2) return;
+  const [a, b] = [...touches.values()], r = el.stage.getBoundingClientRect();
+  const t = Math.min(4, Math.max(0.25, pinch.z * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d));
+  anchor = { x: (a[0] + b[0]) / 2 - r.left, y: (a[1] + b[1]) / 2 - r.top };
+  $('zval').textContent = Math.round(t * 100) + '%'; Z.target = t; Z.snap(t);
+});
+const endTouch = (e) => { touches.delete(e.pointerId); if (touches.size < 2) pinch = null; };
+el.stage.addEventListener('pointerup', endTouch); el.stage.addEventListener('pointercancel', endTouch);
+
 // ---------------------------------------------------------------- page rendering (crisp at every zoom, never blanks while re-rendering)
 const dpr = () => window.devicePixelRatio || 1;
 const wantF = (pg) => Math.max(1, Math.min(dpr() * Math.max(1, Z.target), 4, Math.sqrt(24e6 / (pg.w * pg.h * SCALE * SCALE))));
@@ -125,6 +144,7 @@ async function ensureRes() {
     for (const pg of pages) {
       if (tok !== loadToken) return;
       const r = pg.el.getBoundingClientRect();
+      if (r.bottom < sr.top - 3 * sr.height || r.top > sr.bottom + 3 * sr.height) { if (pg.canvas) { pg.task?.cancel(); pg.rtoken++; pg.canvas.remove(); pg.canvas = null; pg.f = 0; } continue; }
       if (r.bottom < sr.top - 500 || r.top > sr.bottom + 500) continue;
       const f = wantF(pg);
       if (!pg.f || pg.f < f * 0.85 || pg.f > f * 2.2) await renderPage(pg, f);
@@ -201,19 +221,28 @@ async function enterUI() {
   play(el.dock, [{ opacity: 0, transform: 'translateX(-30px) scale(.9)' }, { opacity: 1, transform: 'none' }], { spring: [260, 20], delay: 220 });
   moveInd(true);
 }
-async function buildThumbs(token) {
-  for (let i = 0; i < pages.length; i++) {
-    const pg = pages[i], b = document.createElement('button');
+function buildThumbs(token) {
+  const tw = 108, io = new IntersectionObserver((entries) => {
+    for (const en of entries) {
+      if (!en.isIntersecting) continue;
+      const pg = en.target._pg; io.unobserve(en.target);
+      if (token !== loadToken || pg.thumbDone) continue;
+      pg.thumbDone = true;
+      const c = pg.thumb.firstElementChild;
+      pg.page.render({ canvasContext: c.getContext('2d'), viewport: pg.page.getViewport({ scale: (tw * dpr()) / pg.w }) }).promise.catch(() => {});
+    }
+  }, { root: el.thumbs, rootMargin: '400px 0px' });
+  pages.forEach((pg, i) => {
+    const b = document.createElement('button');
     b.className = 'thumb'; b.setAttribute('aria-label', 'Go to page ' + (i + 1));
-    const c = document.createElement('canvas'), tw = 108, s = tw / pg.w;
-    c.width = Math.round(tw * dpr()); c.height = Math.round(pg.h * s * dpr()); c.style.aspectRatio = `${pg.w}/${pg.h}`;
+    const c = document.createElement('canvas');
+    c.width = Math.round(tw * dpr()); c.height = Math.round(pg.h * (tw / pg.w) * dpr()); c.style.aspectRatio = `${pg.w}/${pg.h}`;
     const lbl = document.createElement('span'); lbl.textContent = i + 1;
-    b.append(c, lbl); el.thumbs.append(b); pg.thumb = b;
+    b.append(c, lbl); el.thumbs.append(b); pg.thumb = b; b._pg = pg;
     b.onclick = () => smoothScroll(el.stage, pg.el.offsetTop - 22 * curZ);
     if (i < 12) play(b, [{ opacity: 0, transform: 'translateX(-14px)' }, { opacity: 1, transform: 'none' }], { spring: [260, 24], delay: i * 45 });
-    try { await pg.page.render({ canvasContext: c.getContext('2d'), viewport: pg.page.getViewport({ scale: (tw * dpr()) / pg.w }) }).promise; } catch {}
-    if (token !== loadToken) return;
-  }
+    io.observe(b);
+  });
   markCurrent(true);
 }
 
@@ -227,7 +256,7 @@ function onScroll() {
     pages.forEach((pg, i) => { const r = pg.el.getBoundingClientRect(); const v = Math.min(r.bottom, sr.bottom) - Math.max(r.top, sr.top); if (v > bestV) { bestV = v; best = i; } });
     if (best !== current) { const dir = best > current ? 1 : -1; current = best; markCurrent(false, dir); }
   });
-  scheduleRes(220);
+  scheduleRes(90);
 }
 function markCurrent(force, dir = 1) {
   pages.forEach((pg, i) => pg.thumb?.classList.toggle('on', i === current));
@@ -303,7 +332,7 @@ function editItem(pg, it) {
 function wirePage(pg) {
   const pos = (e) => { const r = pg.sheet.getBoundingClientRect(), k = SCALE * curZ; return [(e.clientX - r.left) / k, (e.clientY - r.top) / k]; };
   pg.sheet.addEventListener('pointerdown', async (e) => {
-    if (e.target.closest('.editor') || e.button > 0) return;
+    if (e.target.closest('.editor') || e.button > 0 || !e.isPrimary || touches.size > 1) return;
     const [x, y] = pos(e);
     if (tool === 'erase') {
       const n = e.target.closest('.op'); if (!n || !n._op) return;
@@ -380,6 +409,8 @@ function setTool(t, silent) {
   const showCtl = !!def.ctl, size = $('size');
   $('swatches').hidden = !showCtl; $('sizeCtl').hidden = !showCtl;
   if (showCtl) { const d = def.ctl === 'draw'; size.min = d ? 1 : 6; size.max = d ? 24 : 72; size.value = sizes[def.ctl]; $('sizeVal').textContent = size.value; $('sizeLbl').textContent = d ? 'Width' : 'Size'; }
+  el.inspector.classList.toggle('has-ctl', showCtl);
+  el.inspector.classList.add('flash'); clearTimeout(setTool.t); setTool.t = setTimeout(() => el.inspector.classList.remove('flash'), 2600);
   if (el.app.dataset.state === 'ready') {
     if (el.inspector.hidden) { el.inspector.hidden = false; play(el.inspector, [{ opacity: 0, transform: 'translateY(18px) scale(.96)' }, { opacity: 1, transform: 'none' }], { spring: [280, 22], delay: 500 }); }
     else if (changed) play(el.hint, [{ opacity: 0, transform: 'translateY(5px)' }, { opacity: 1, transform: 'none' }], { duration: 240 });

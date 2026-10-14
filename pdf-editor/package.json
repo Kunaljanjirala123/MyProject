@@ -5,7 +5,7 @@
   "description": "Browser PDF editor that layers edits over the original without re-flowing or re-encoding it",
   "scripts": {
     "start": "python3 -m http.server 8080",
-    "test": "node test.mjs"
+    "test": "node test.mjs && node test-large.mjs"
   },
   "dependencies": {
     "pdf-lib": "^1.17.1",

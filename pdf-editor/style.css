@@ -151,6 +151,10 @@ h1 em{font-style:normal;color:var(--muted)}
   #dock hr{width:0;height:24px;margin:auto 2px;border:0;border-left:1px solid var(--line)}
   .inspector{bottom:calc(78px + env(safe-area-inset-bottom,0));translate:-50% 0;max-width:calc(100vw - 24px);flex-wrap:wrap;gap:8px;padding:8px 12px}
   .hint{white-space:normal;font-size:12px}.ctrl{border:0;padding:0}
+  .inspector{transition:opacity .3s,visibility .3s}
+  .inspector:not(.flash):not(.has-ctl){opacity:0;visibility:hidden;pointer-events:none}
+  .inspector.has-ctl:not(.flash) .hint{display:none}
+  .page{touch-action:pan-x pan-y}
   .pager{left:12px;bottom:auto;top:calc(var(--bar) + 10px)}
   .brand span{display:none}
 }
